@@ -14,9 +14,9 @@ button { cursor:pointer; }
 .icon-button:hover,.back-button:hover { background:#eae7de; color:var(--ink); }
 .view { height:calc(100% - 29px); display:flex; flex-direction:column; }
 .hidden { display:none !important; }
-.eyebrow { margin-top:25px; display:flex; align-items:center; gap:7px; text-transform:uppercase; font-size:9px; font-weight:600; letter-spacing:.16em; color:#8a968b; }
+.eyebrow { margin-top:22px; display:flex; align-items:center; gap:7px; text-transform:uppercase; font-size:9px; font-weight:600; letter-spacing:.16em; color:#8a968b; }
 .dot { width:6px; height:6px; background:var(--coral); border-radius:50%; box-shadow:0 0 0 3px #c887701a; }
-.quote-card { position:relative; background:var(--card); border:1px solid #eeece4; border-radius:15px; margin-top:13px; padding:30px 24px 17px; min-height:208px; box-shadow:0 8px 25px #3843340a; display:flex; flex-direction:column; }
+.quote-card { position:relative; background:var(--card); border:1px solid #eeece4; border-radius:15px; margin-top:13px; padding:30px 24px 17px; min-height:200px; box-shadow:0 8px 25px #3843340a; display:flex; flex-direction:column; }
 .quote-mark { position:absolute; top:10px; left:19px; color:#c4c9b7; font-family:Georgia,serif; font-size:34px; line-height:1; }
 .quote-text { margin:18px 0 0; font-family:'Noto Serif SC','Songti SC','SimSun',serif; font-size:23px; line-height:1.75; letter-spacing:.025em; color:#33483a; white-space:pre-wrap; overflow-wrap:anywhere; }
 .quote-source { min-height:15px; margin:10px 0 0; font-size:11px; color:#999c91; }
@@ -24,10 +24,16 @@ button { cursor:pointer; }
 .quote-index { font-size:10px; letter-spacing:.08em; color:#adb1a6; }
 .text-button { border:0; background:transparent; color:#617666; font-size:11px; padding:3px 0; }
 .text-button span { padding-left:4px; }
-.today-row { display:flex; align-items:center; justify-content:space-between; margin:17px 3px 0; padding:0 1px; }
+.today-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 3px 0; padding:0 1px; }
+.today-prompt { min-width:0; flex:1; }
 .today-label { text-transform:uppercase; letter-spacing:.14em; font-size:9px; color:#a0a193; }
-.today-copy { margin-top:6px; font-size:11px; color:#69776c; }
-.sun-icon { font-size:21px; color:#c9a477; padding-right:3px; }
+.today-copy { margin-top:6px; max-width:200px; font-size:11px; line-height:1.55; color:#69776c; }
+.ambient-widget { flex:none; width:108px; padding-left:12px; border-left:1px solid #e8e5dc; text-align:right; }
+.ambient-time { display:block; color:#405849; font-size:20px; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+.ambient-date { display:block; margin-top:4px; color:#92988e; font-size:8px; }
+.weather-line { display:flex; justify-content:flex-end; align-items:center; gap:5px; margin-top:6px; color:#758278; font-size:8px; white-space:nowrap; }
+.weather-symbol { color:#c9a477; font-size:12px; line-height:1; }
+.weather-line span:last-child { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .footer-row { margin-top:auto; display:flex; align-items:center; justify-content:space-between; padding-top:12px; }
 .primary-button { height:37px; border:0; border-radius:9px; background:var(--green); color:#fffdf7; padding:0 14px; font-size:11px; letter-spacing:.02em; box-shadow:0 3px 8px #40584922; }
 .primary-button:hover { background:#354c3d; }
@@ -67,6 +73,15 @@ textarea::placeholder,input::placeholder { color:#b4b5a9; }
 .add-button { flex:1; margin-top:0; }
 .add-button span { float:right; padding:0; }
 .cancel-button { background:transparent; border:1px solid #e3e0d7; color:#879087; border-radius:9px; padding:0 10px; font-size:10px; }
+.weather-settings { margin-top:12px; border-top:1px solid #e6e3da; padding-top:10px; }
+.weather-settings-heading { margin-bottom:7px; color:#78847b; font-size:10px; }
+.weather-settings-controls { display:flex; align-items:center; gap:7px; }
+.weather-auto-setting { display:flex; align-items:center; gap:5px; flex:none; color:#78847b; font-size:9px; cursor:pointer; }
+.weather-auto-setting input { accent-color:var(--green); margin:0; }
+.weather-settings-controls input[type="text"],#weather-city-input { min-width:0; flex:1; height:29px; border:1px solid #e9e6dd; border-radius:7px; color:#69776c; background:#f9f7f0; font-size:9px; padding:0 8px; }
+.weather-refresh-button { flex:none; border:1px solid #e0e3d9; border-radius:7px; background:#f8f6ef; color:#66796a; font-size:9px; padding:6px 9px; }
+.weather-refresh-button:hover { background:#eeeee5; }
+.weather-note { margin:6px 0 0; color:#a1a397; font-size:8px; line-height:1.45; }
 .settings-line { display:flex; gap:19px; align-items:center; border-top:1px solid #e6e3da; margin-top:13px; padding-top:11px; }
 .setting { display:flex; align-items:center; gap:6px; color:#78847b; font-size:10px; cursor:pointer; }
 .setting input { position:absolute; opacity:0; pointer-events:none; }

@@ -24,7 +24,14 @@
         <p id="quote-source" class="quote-source"></p>
         <div class="card-bottom"><span id="quote-index" class="quote-index"></span><button id="next-quote" class="text-button">换一句 <span>↗</span></button></div>
       </article>
-      <div class="today-row"><div><div class="today-label">给今天的一点提醒</div><div class="today-copy">不必一次做好所有事，先别忘了什么最重要。</div></div><span class="sun-icon">☼</span></div>
+      <div class="today-row">
+        <div class="today-prompt"><div class="today-label">给今天的一点提醒</div><div class="today-copy">不必一次做好所有事，先别忘了什么最重要。</div></div>
+        <div class="ambient-widget" aria-label="本地时间和天气">
+          <time id="local-time" class="ambient-time">--:--</time>
+          <span id="local-date" class="ambient-date"></span>
+          <span class="weather-line"><span id="weather-symbol" class="weather-symbol">◌</span><span id="weather-summary">正在获取天气</span></span>
+        </div>
+      </div>
       <footer class="footer-row">
         <button id="manage" class="primary-button"><span>＋</span> 管理我的话</button>
         <button id="pin-toggle" class="subtle-button"><span id="pin-icon">⌖</span><span id="pin-label">置顶中</span></button>
@@ -40,6 +47,15 @@
         <div class="form-bottom"><input id="source-input" maxlength="100" placeholder="出处 / 对自己说（可选）"><select id="expiry-input" aria-label="保留时间"><option value="3">保留 3 个月</option><option value="6" selected>保留 6 个月</option><option value="12">保留 1 年</option><option value="">一直保留</option></select></div>
         <div class="form-actions"><button type="submit" class="primary-button add-button">保存这句话 <span>↗</span></button><button id="cancel-edit" type="button" class="cancel-button hidden">取消修改</button></div>
       </form>
+      <div class="weather-settings">
+        <div class="weather-settings-heading">时间与天气</div>
+        <div class="weather-settings-controls">
+          <label class="weather-auto-setting"><input id="weather-auto" type="checkbox"><span>自动定位</span></label>
+          <input id="weather-city-input" maxlength="80" placeholder="输入城市名称" aria-label="天气城市">
+          <button id="weather-refresh" class="weather-refresh-button" type="button">更新</button>
+        </div>
+        <p class="weather-note">自动定位会将约 1 公里精度的坐标发送给 Open-Meteo 查询，不会保存在醒签。天气数据：Open-Meteo；城市数据：GeoNames。</p>
+      </div>
       <div class="settings-line">
         <label class="setting"><input id="always-top" type="checkbox"><span class="switch"></span><span>始终置顶</span></label>
         <label class="setting"><input id="login-start" type="checkbox"><span class="switch"></span><span>登录时显示</span></label>

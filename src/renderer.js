@@ -3,6 +3,107 @@ const appState = { quotes: [], currentId: '', priorityId: '', settings: {}, last
 const dateKey = () => new Date().toISOString().slice(0, 10);
 let toastTimer;
 let quoteEditingId = '';
+let weatherLocationDeclined = false;
+let weatherRequestInFlight = false;
+
+function renderClock() {
+  const now = new Date();
+  $('local-time').textContent = new Intl.DateTimeFormat('zh-Hans-CN', {
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(now);
+  $('local-date').textContent = new Intl.DateTimeFormat('zh-Hans-CN', {
+    month: 'numeric', day: 'numeric', weekday: 'short'
+  }).format(now);
+}
+
+renderClock();
+setInterval(renderClock, 15000);
+
+function showWeather(result) {
+  const symbol = $('weather-symbol');
+  const summary = $('weather-summary');
+  if (result?.status === 'ok') {
+    symbol.textContent = result.symbol || '☁';
+    summary.textContent = `${result.location} ${result.temperature}° ${result.condition}`;
+    summary.title = summary.textContent;
+    return;
+  }
+  symbol.textContent = result?.status === 'error' ? '◌' : '☼';
+  const messages = {
+    'not-found': '找不到这个城市',
+    'missing-city': '请输入城市',
+    'location-denied': '定位未启用',
+    'location-unavailable': '定位暂不可用',
+    'error': '天气暂不可用'
+  };
+  summary.textContent = messages[result?.status] || '天气暂不可用';
+  summary.title = summary.textContent;
+}
+
+async function currentPosition() {
+  if (!navigator.geolocation) throw new Error('Geolocation is unavailable');
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      maximumAge: 15 * 60 * 1000,
+      timeout: 12000
+    });
+  });
+}
+
+async function refreshWeather(manual = false) {
+  if (weatherRequestInFlight) return;
+  weatherRequestInFlight = true;
+  const button = $('weather-refresh');
+  if (button) { button.disabled = true; button.textContent = '…'; }
+  const useAuto = Boolean($('weather-auto').checked);
+  const city = $('weather-city-input').value.trim();
+  appState.settings.weatherUseAuto = useAuto;
+  appState.settings.weatherCity = city;
+  await save();
+  $('weather-symbol').textContent = '◌';
+  $('weather-summary').textContent = useAuto ? '正在定位…' : (city ? '正在查询…' : '先填写城市');
+
+  try {
+    let result;
+    if (useAuto) {
+      if (weatherLocationDeclined && !manual) return;
+      const allowed = await window.xingqian.allowWeatherLocation();
+      if (!allowed) {
+        weatherLocationDeclined = true;
+        result = { status: 'location-denied' };
+      } else {
+        try {
+          const position = await currentPosition();
+          result = await window.xingqian.getWeather({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude
+          });
+        } catch (_) {
+          result = { status: 'location-unavailable' };
+        }
+      }
+      if (result?.status !== 'ok' && city) result = await window.xingqian.getWeather({ city });
+    } else if (city) {
+      result = await window.xingqian.getWeather({ city });
+    } else {
+      result = { status: 'missing-city' };
+    }
+    showWeather(result);
+  } catch (_) {
+    showWeather({ status: 'error' });
+  } finally {
+    weatherRequestInFlight = false;
+    if (button) { button.disabled = false; button.textContent = '更新'; }
+  }
+}
+
+function renderWeatherSettings() {
+  const useAuto = appState.settings.weatherUseAuto !== false;
+  $('weather-auto').checked = useAuto;
+  $('weather-city-input').value = appState.settings.weatherCity || '';
+  $('weather-city-input').classList.toggle('hidden', useAuto);
+}
 
 function activeQuotes() {
   const today = dateKey();
@@ -114,6 +215,7 @@ function render() {
   renderList();
   $('always-top').checked = Boolean(appState.settings.alwaysOnTop);
   $('login-start').checked = Boolean(appState.settings.openAtLogin);
+  renderWeatherSettings();
   $('login-start').disabled = !appState.isPackaged;
   $('login-start').title = appState.isPackaged ? '' : '请安装打包版本后设置登录启动';
   $('check-updates').disabled = !appState.updateConfigured;
@@ -189,6 +291,12 @@ $('quote-form').addEventListener('submit', async (event) => {
 $('cancel-edit').addEventListener('click', cancelEdit);
 $('always-top').addEventListener('change', async (event) => { appState.settings.alwaysOnTop = event.target.checked; await save(); renderCard(); });
 $('login-start').addEventListener('change', async (event) => { appState.settings.openAtLogin = event.target.checked; await save(); toast(event.target.checked ? '已设为登录时显示' : '已关闭登录时启动'); });
+$('weather-auto').addEventListener('change', async (event) => {
+  appState.settings.weatherUseAuto = event.target.checked;
+  renderWeatherSettings();
+  await save();
+});
+$('weather-refresh').addEventListener('click', () => refreshWeather(true));
 $('check-updates').addEventListener('click', async () => {
   $('check-updates').disabled = true;
   showUpdateStatus({ type: 'checking' });
@@ -213,4 +321,6 @@ window.xingqian.onUpdateStatus(showUpdateStatus);
   appState.lastRotationDate = today;
   await save();
   render();
+  refreshWeather();
+  setInterval(() => refreshWeather(), 20 * 60 * 1000);
 })();
