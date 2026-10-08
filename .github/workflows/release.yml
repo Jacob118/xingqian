@@ -103,7 +103,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Build Intel and Apple silicon disk images
-        run: npx electron-builder --mac dmg --config electron-builder.config.cjs --x64 --arm64
+        run: npx electron-builder --mac dmg --config electron-builder.config.cjs --x64 --arm64 --publish never
       - name: Upload disk images to the public release
         uses: actions/github-script@v7
         env:
