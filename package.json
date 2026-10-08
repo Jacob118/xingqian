@@ -1,0 +1,20 @@
+{
+  "name": "xingqian-desktop",
+  "version": "0.2.0",
+  "description": "A quiet, always-on-top desktop card for the words that matter.",
+  "main": "src/main.cjs",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis --config electron-builder.config.cjs --publish never",
+    "publish:win": "electron-builder --win nsis --config electron-builder.config.cjs --publish always",
+    "dist:mac": "electron-builder --mac dmg --config electron-builder.config.cjs"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

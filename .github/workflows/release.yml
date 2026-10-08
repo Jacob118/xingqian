@@ -1,0 +1,46 @@
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/github-script@v7
+        id: release
+        with:
+          script: |
+            const fs = require('fs');
+            const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
+            core.setOutput('version', version);
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: `v${version}`
+              });
+              core.setOutput('already-published', 'true');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              core.setOutput('already-published', 'false');
+            }
+      - if: steps.release.outputs.already-published != 'true'
+        run: npm ci
+      - if: steps.release.outputs.already-published != 'true'
+        name: Build and publish Windows installer
+        run: npm run publish:win
+        env:
+          GH_TOKEN: ${{ github.token }}
+          XINGQIAN_GITHUB_OWNER: ${{ github.repository_owner }}
+          XINGQIAN_GITHUB_REPO: ${{ github.event.repository.name }}

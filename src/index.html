@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
+  <title>醒签</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">✳</span><span>醒签</span><span class="brand-note">留一席给重要的事</span></div>
+      <div class="window-actions">
+        <button id="minimize" class="icon-button" title="折叠成优先提醒长条" aria-label="折叠成优先提醒长条">—</button>
+      </div>
+    </header>
+
+    <section id="card-view" class="view">
+      <div class="eyebrow"><span class="dot"></span><span id="active-count">正在提醒</span></div>
+      <article class="quote-card">
+        <span class="quote-mark">“</span>
+        <p id="quote-text" class="quote-text"></p>
+        <p id="quote-source" class="quote-source"></p>
+        <div class="card-bottom"><span id="quote-index" class="quote-index"></span><button id="next-quote" class="text-button">换一句 <span>↗</span></button></div>
+      </article>
+      <div class="today-row"><div><div class="today-label">给今天的一点提醒</div><div class="today-copy">不必一次做好所有事，先别忘了什么最重要。</div></div><span class="sun-icon">☼</span></div>
+      <footer class="footer-row">
+        <button id="manage" class="primary-button"><span>＋</span> 管理我的话</button>
+        <button id="pin-toggle" class="subtle-button"><span id="pin-icon">⌖</span><span id="pin-label">置顶中</span></button>
+      </footer>
+    </section>
+
+    <section id="manage-view" class="view hidden">
+      <div class="manage-heading"><div><div class="eyebrow"><span class="dot"></span>你的收藏</div><h1>留住那些重要的话</h1></div><button id="back" class="back-button">返回卡片</button></div>
+      <div id="quote-list" class="quote-list"></div>
+      <form id="quote-form" class="quote-form">
+        <label class="field-label" for="quote-input">添加一句</label>
+        <textarea id="quote-input" rows="2" maxlength="500" placeholder="写下最近想记住的话……" required></textarea>
+        <div class="form-bottom"><input id="source-input" maxlength="100" placeholder="出处 / 对自己说（可选）"><select id="expiry-input" aria-label="保留时间"><option value="3">保留 3 个月</option><option value="6" selected>保留 6 个月</option><option value="12">保留 1 年</option><option value="">一直保留</option></select></div>
+        <div class="form-actions"><button type="submit" class="primary-button add-button">保存这句话 <span>↗</span></button><button id="cancel-edit" type="button" class="cancel-button hidden">取消修改</button></div>
+      </form>
+      <div class="settings-line">
+        <label class="setting"><input id="always-top" type="checkbox"><span class="switch"></span><span>始终置顶</span></label>
+        <label class="setting"><input id="login-start" type="checkbox"><span class="switch"></span><span>登录时显示</span></label>
+      </div>
+      <div class="update-row">
+        <div class="update-copy"><span class="update-heading">自动更新</span><span id="update-status" class="update-status">发布更新源后可用</span></div>
+        <button id="check-updates" class="update-button" type="button">检查更新</button>
+      </div>
+      <p class="privacy-note"><span>⌑</span> 内容仅保存在这台电脑上</p>
+    </section>
+    <button id="compact-view" class="compact-view" type="button" aria-label="展开醒签卡片">
+      <span class="compact-dot"></span>
+      <span class="compact-label">优先</span>
+      <span id="compact-quote" class="compact-quote"></span>
+      <span class="compact-expand" aria-hidden="true">↗</span>
+    </button>
+    <div id="toast" role="status" class="toast"></div>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>
