@@ -11,6 +11,9 @@ permissions:
 jobs:
   publish:
     runs-on: windows-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      has_mac_assets: ${{ steps.release.outputs.has_mac_assets }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -30,9 +33,11 @@ jobs:
                 repo: context.repo.repo,
                 tag: `v${version}`
               });
+              core.setOutput('has_mac_assets', release.assets.some(asset => asset.name.toLowerCase().endsWith('.dmg')) ? 'true' : 'false');
               core.setOutput('already-published', release.draft ? 'false' : 'true');
             } catch (error) {
               if (error.status !== 404) throw error;
+              core.setOutput('has_mac_assets', 'false');
               core.setOutput('already-published', 'false');
             }
       - if: steps.release.outputs.already-published != 'true'
@@ -85,3 +90,46 @@ jobs:
               }
             }
             core.info(`Published ${selected.html_url}`);
+
+  macos:
+    needs: publish
+    if: needs.publish.outputs.version != '' && needs.publish.outputs.has_mac_assets != 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Build Intel and Apple silicon disk images
+        run: npx electron-builder --mac dmg --config electron-builder.config.cjs --x64 --arm64
+      - name: Upload disk images to the public release
+        uses: actions/github-script@v7
+        env:
+          APP_VERSION: ${{ needs.publish.outputs.version }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const directory = 'release';
+            const files = fs.readdirSync(directory).filter(name => name.toLowerCase().endsWith('.dmg'));
+            if (files.length === 0) throw new Error('The macOS build did not produce a DMG.');
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: `v${process.env.APP_VERSION}`
+            });
+            for (const name of files) {
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+                name,
+                data: fs.createReadStream(path.join(directory, name)),
+                headers: {
+                  'content-type': 'application/x-apple-diskimage',
+                  'content-length': fs.statSync(path.join(directory, name)).size
+                }
+              });
+            }
