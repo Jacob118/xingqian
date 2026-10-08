@@ -25,12 +25,12 @@ jobs:
             const version = JSON.parse(fs.readFileSync('package.json', 'utf8')).version;
             core.setOutput('version', version);
             try {
-              await github.rest.repos.getReleaseByTag({
+              const { data: release } = await github.rest.repos.getReleaseByTag({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 tag: `v${version}`
               });
-              core.setOutput('already-published', 'true');
+              core.setOutput('already-published', release.draft ? 'false' : 'true');
             } catch (error) {
               if (error.status !== 404) throw error;
               core.setOutput('already-published', 'false');
@@ -44,3 +44,44 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           XINGQIAN_GITHUB_OWNER: ${{ github.repository_owner }}
           XINGQIAN_GITHUB_REPO: ${{ github.event.repository.name }}
+      - if: steps.release.outputs.already-published != 'true'
+        name: Publish release and remove duplicate drafts
+        uses: actions/github-script@v7
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+        with:
+          script: |
+            const tag = `v${process.env.APP_VERSION}`;
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            const matching = releases.filter(release => release.tag_name === tag);
+            const installerName = `xingqian-desktop-setup-${process.env.APP_VERSION}.exe`;
+            const hasInstaller = release => release.assets.some(asset => asset.name === installerName)
+              && release.assets.some(asset => asset.name === 'latest.yml');
+            let selected = matching.find(release => !release.draft && hasInstaller(release));
+            if (!selected) selected = matching.find(release => release.draft && hasInstaller(release));
+            if (!selected) {
+              throw new Error(`No ${tag} release contains both ${installerName} and latest.yml.`);
+            }
+            if (selected.draft) {
+              const { data } = await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: selected.id,
+                draft: false
+              });
+              selected = data;
+            }
+            for (const release of matching) {
+              if (release.draft && release.id !== selected.id) {
+                await github.rest.repos.deleteRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.id
+                });
+              }
+            }
+            core.info(`Published ${selected.html_url}`);

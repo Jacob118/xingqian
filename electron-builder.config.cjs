@@ -30,7 +30,7 @@ module.exports = {
     ...((updateUrl || githubOwner) ? {
       publish: [updateUrl
         ? { provider: 'generic', url: updateUrl }
-        : { provider: 'github', owner: githubOwner, repo: githubRepo }],
+        : { provider: 'github', owner: githubOwner, repo: githubRepo, releaseType: 'release' }],
       // This project currently ships without an Authenticode certificate.
       // Turn publisher verification back on when a stable signing certificate is configured.
       verifyUpdateCodeSignature: hasWindowsSigningCertificate
