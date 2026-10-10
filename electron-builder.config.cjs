@@ -23,10 +23,7 @@ module.exports = {
   files: ['src/**/*', 'package.json'],
   mac: {
     target: 'dmg',
-    category: 'public.app-category.productivity',
-    extendInfo: {
-      NSLocationWhenInUseUsageDescription: '醒签使用设备的大致位置查询本地天气。'
-    }
+    category: 'public.app-category.productivity'
   },
   win: {
     target: 'nsis',
@@ -44,3 +41,4 @@ module.exports = {
     allowToChangeInstallationDirectory: true
   }
 };
+

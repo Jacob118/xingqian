@@ -3,8 +3,47 @@ const appState = { quotes: [], currentId: '', priorityId: '', settings: {}, last
 const dateKey = () => new Date().toISOString().slice(0, 10);
 let toastTimer;
 let quoteEditingId = '';
-let weatherLocationDeclined = false;
-let weatherRequestInFlight = false;
+let selectedSku = '';
+const expandedPackIds = new Set();
+
+const quotePacks = [
+  {
+    id: 'nietzsche', author: '尼采', work: '《偶像的黄昏》',
+    quotes: [
+      { text: '未能将我击碎的事，也在锻造我。', source: '《偶像的黄昏》· 箴言与箭 8', locked: false },
+      { text: '一个深邃的思想，也愿意化作一句箴言。', source: '编辑转述示例，非原文引句', locked: false },
+      { text: '你心中须有混沌，才能诞生一颗跳舞的星。', source: '《查拉图斯特拉如是说》· 序言 5', locked: true },
+      { text: '人应当成为自己，而不是安于既定的模样。', source: '据《查拉图斯特拉如是说》思想转述', locked: true }
+    ]
+  },
+  {
+    id: 'kant', author: '康德', work: '《答复这个问题：什么是启蒙？》',
+    quotes: [
+      { text: '要有勇气运用你自己的理智。', source: '《答复这个问题：什么是启蒙？》', locked: false },
+      { text: '思想若没有内容便空，直观若没有概念便盲。', source: '《纯粹理性批判》· A51/B75', locked: false },
+      { text: '自由，是不受他人任意选择支配的权利。', source: '据《道德形而上学》思想转译', locked: true },
+      { text: '对待每一个人，都要同时把他看作目的。', source: '据《道德形而上学奠基》思想转译', locked: true }
+    ]
+  },
+  {
+    id: 'wittgenstein', author: '维特根斯坦', work: '《逻辑哲学论》',
+    quotes: [
+      { text: '哲学不是一套学说，而是一种活动。', source: '《逻辑哲学论》· 4.112', locked: false },
+      { text: '我的语言的边界，就是我的世界的边界。', source: '《逻辑哲学论》· 5.6', locked: false },
+      { text: '世界是事实的总和，而不是事物的总和。', source: '《逻辑哲学论》· 1.1', locked: true },
+      { text: '对于不可说的东西，我们必须保持沉默。', source: '《逻辑哲学论》· 7', locked: true }
+    ]
+  },
+  {
+    id: 'beauvoir', author: '西蒙娜·德·波伏瓦', work: '《第二性》· 思想转述示例',
+    quotes: [
+      { text: '女性的处境并非先天命定，也由制度与日常生活塑造。', source: '编辑转述示例，非原文引句', locked: false },
+      { text: '理解一个人，也要看她被允许成为什么。', source: '编辑转述示例，非原文引句', locked: false },
+      { text: '自由不只关乎选择，也关乎选择是否真正可行。', source: '据《第二性》思想转述示例，非原文引句', locked: true },
+      { text: '改变处境，需要看见它如何被建构。', source: '据《第二性》思想转述示例，非原文引句', locked: true }
+    ]
+  }
+];
 
 function renderClock() {
   const now = new Date();
@@ -18,92 +57,6 @@ function renderClock() {
 
 renderClock();
 setInterval(renderClock, 15000);
-
-function showWeather(result) {
-  const symbol = $('weather-symbol');
-  const summary = $('weather-summary');
-  if (result?.status === 'ok') {
-    symbol.textContent = result.symbol || '☁';
-    summary.textContent = `${result.location} ${result.temperature}° ${result.condition}`;
-    summary.title = summary.textContent;
-    return;
-  }
-  symbol.textContent = result?.status === 'error' ? '◌' : '☼';
-  const messages = {
-    'not-found': '找不到这个城市',
-    'missing-city': '请输入城市',
-    'location-denied': '定位未启用',
-    'location-unavailable': '定位暂不可用',
-    'error': '天气暂不可用'
-  };
-  summary.textContent = messages[result?.status] || '天气暂不可用';
-  summary.title = summary.textContent;
-}
-
-async function currentPosition() {
-  if (!navigator.geolocation) throw new Error('Geolocation is unavailable');
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      maximumAge: 15 * 60 * 1000,
-      timeout: 12000
-    });
-  });
-}
-
-async function refreshWeather(manual = false) {
-  if (weatherRequestInFlight) return;
-  weatherRequestInFlight = true;
-  const button = $('weather-refresh');
-  if (button) { button.disabled = true; button.textContent = '…'; }
-  const useAuto = Boolean($('weather-auto').checked);
-  const city = $('weather-city-input').value.trim();
-  appState.settings.weatherUseAuto = useAuto;
-  appState.settings.weatherCity = city;
-  await save();
-  $('weather-symbol').textContent = '◌';
-  $('weather-summary').textContent = useAuto ? '正在定位…' : (city ? '正在查询…' : '先填写城市');
-
-  try {
-    let result;
-    if (useAuto) {
-      if (weatherLocationDeclined && !manual) return;
-      const allowed = await window.xingqian.allowWeatherLocation();
-      if (!allowed) {
-        weatherLocationDeclined = true;
-        result = { status: 'location-denied' };
-      } else {
-        try {
-          const position = await currentPosition();
-          result = await window.xingqian.getWeather({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          });
-        } catch (_) {
-          result = { status: 'location-unavailable' };
-        }
-      }
-      if (result?.status !== 'ok' && city) result = await window.xingqian.getWeather({ city });
-    } else if (city) {
-      result = await window.xingqian.getWeather({ city });
-    } else {
-      result = { status: 'missing-city' };
-    }
-    showWeather(result);
-  } catch (_) {
-    showWeather({ status: 'error' });
-  } finally {
-    weatherRequestInFlight = false;
-    if (button) { button.disabled = false; button.textContent = '更新'; }
-  }
-}
-
-function renderWeatherSettings() {
-  const useAuto = appState.settings.weatherUseAuto !== false;
-  $('weather-auto').checked = useAuto;
-  $('weather-city-input').value = appState.settings.weatherCity || '';
-  $('weather-city-input').classList.toggle('hidden', useAuto);
-}
 
 function activeQuotes() {
   const today = dateKey();
@@ -126,6 +79,7 @@ function priorityQuote() {
 }
 
 async function save() {
+  if (!window.xingqian?.saveState) return appState;
   const stored = await window.xingqian.saveState(appState);
   Object.assign(appState, stored);
 }
@@ -210,12 +164,85 @@ function renderList() {
   });
 }
 
+function renderQuotePacks() {
+  const list = $('quote-pack-list');
+  if (!list) return;
+  list.replaceChildren();
+  quotePacks.forEach((pack) => {
+    const expanded = expandedPackIds.has(pack.id);
+    const card = document.createElement('article');
+    card.className = `quote-pack-card${expanded ? ' is-expanded' : ''}`;
+
+    const header = document.createElement('button');
+    header.type = 'button';
+    header.className = 'quote-pack-header';
+    header.setAttribute('aria-expanded', String(expanded));
+    header.setAttribute('aria-controls', `pack-quotes-${pack.id}`);
+    const author = document.createElement('span');
+    author.className = 'quote-pack-author';
+    author.textContent = pack.author;
+    const preview = document.createElement('span');
+    preview.className = 'quote-pack-preview';
+    preview.textContent = pack.quotes[0].text;
+    const arrow = document.createElement('span');
+    arrow.className = 'quote-pack-chevron';
+    arrow.setAttribute('aria-hidden', 'true');
+    arrow.textContent = expanded ? '⌃' : '⌄';
+    header.append(author, preview, arrow);
+    header.addEventListener('click', () => {
+      if (expanded) expandedPackIds.delete(pack.id);
+      else expandedPackIds.add(pack.id);
+      renderQuotePacks();
+    });
+    card.append(header);
+
+    if (expanded) {
+      const entries = document.createElement('div');
+      entries.className = 'quote-pack-entries';
+      entries.id = `pack-quotes-${pack.id}`;
+      pack.quotes.forEach((item) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `pack-quote${item.locked ? ' is-muted' : ''}`;
+        button.setAttribute('aria-label', item.locked ? `解锁：${item.text}` : `收进我的话：${item.text}`);
+        const text = document.createElement('span');
+        text.className = 'pack-quote-text';
+        text.textContent = item.text;
+        const source = document.createElement('small');
+        source.className = 'pack-quote-source';
+        source.textContent = item.source;
+        button.append(text, source);
+        button.addEventListener('click', () => {
+          if (item.locked) {
+            openUnlockShelf(`${pack.author}的语录包`, 'pack');
+            return;
+          }
+          const sourceLabel = `${pack.author} · ${item.source}`;
+          let quote = appState.quotes.find((saved) => saved.text === item.text && saved.source === sourceLabel);
+          if (!quote) {
+            quote = { id: crypto.randomUUID(), text: item.text, source: sourceLabel, createdAt: new Date().toISOString(), expiresAt: '', active: true };
+            appState.quotes.unshift(quote);
+          }
+          appState.currentId = quote.id;
+          save().then(() => {
+            render();
+            toast('已收进你的话');
+          });
+        });
+        entries.append(button);
+      });
+      card.append(entries);
+    }
+    list.append(card);
+  });
+}
+
 function render() {
   renderCard();
   renderList();
+  renderQuotePacks();
   $('always-top').checked = Boolean(appState.settings.alwaysOnTop);
   $('login-start').checked = Boolean(appState.settings.openAtLogin);
-  renderWeatherSettings();
   $('login-start').disabled = !appState.isPackaged;
   $('login-start').title = appState.isPackaged ? '' : '请安装打包版本后设置登录启动';
   $('check-updates').disabled = !appState.updateConfigured;
@@ -244,7 +271,7 @@ function showView(view) {
   const managing = view === 'manage';
   $('card-view').classList.toggle('hidden', managing);
   $('manage-view').classList.toggle('hidden', !managing);
-  window.xingqian.resize(managing ? 'manage' : 'card');
+  window.xingqian?.resize?.(managing ? 'manage' : 'card');
 }
 
 function cancelEdit() {
@@ -255,10 +282,80 @@ function cancelEdit() {
   $('cancel-edit').classList.add('hidden');
 }
 
-$('manage').addEventListener('click', () => showView('manage'));
+function switchManagerTab(name) {
+  document.querySelectorAll('[data-manager-tab]').forEach((tab) => {
+    const active = tab.dataset.managerTab === name;
+    tab.classList.toggle('is-active', active);
+    tab.setAttribute('aria-selected', String(active));
+  });
+  document.querySelectorAll('[data-manager-pane]').forEach((pane) => {
+    pane.classList.toggle('hidden', pane.dataset.managerPane !== name);
+  });
+}
+
+function openUnlockShelf(title, kind) {
+  $('shelf-title').textContent = `解锁${title}`;
+  $('shelf-description').textContent = kind === 'theme'
+    ? '这款卡片外观属于醒签会员内容。选择一个方案继续。'
+    : '这个完整语录包属于醒签会员内容。选择一个方案继续。';
+  selectedSku = '';
+  document.querySelectorAll('[name="selected-sku"]').forEach((radio) => { radio.checked = false; });
+  $('purchase-sku').disabled = true;
+  $('purchase-sku').textContent = '先选择一个方案';
+  $('shelf-plans').classList.remove('hidden');
+  $('shelf-payment').classList.add('hidden');
+  $('unlock-shelf').classList.remove('hidden');
+}
+
+document.querySelectorAll('[data-manager-tab]').forEach((tab) => {
+  tab.addEventListener('click', () => switchManagerTab(tab.dataset.managerTab));
+});
+$('toggle-themes').addEventListener('click', () => {
+  const expanded = $('toggle-themes').getAttribute('aria-expanded') === 'true';
+  $('toggle-themes').setAttribute('aria-expanded', String(!expanded));
+  $('theme-picker').classList.toggle('hidden', expanded);
+});
+document.querySelectorAll('[data-theme-option]').forEach((button) => {
+  button.addEventListener('click', () => {
+    if (button.dataset.themeOption !== 'paper') {
+      openUnlockShelf(`${button.querySelector('span:last-child').textContent.replace('⌑', '').trim()}主题`, 'theme');
+      return;
+    }
+    document.querySelectorAll('[data-theme-option]').forEach((item) => item.classList.toggle('is-selected', item === button));
+    $('current-theme-name').textContent = '纸笺';
+    toast('已使用纸笺外观');
+  });
+});
+document.querySelectorAll('[name="selected-sku"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    selectedSku = radio.value;
+    $('purchase-sku').disabled = false;
+    $('purchase-sku').textContent = selectedSku === 'annual' ? '购买年卡 · ¥15 / 年' : '购买终身会员 · ¥20';
+  });
+});
+$('purchase-sku').addEventListener('click', () => {
+  if (!selectedSku) return;
+  $('payment-plan-label').textContent = selectedSku === 'annual' ? '年卡 · ¥15 / 年' : '终身会员 · ¥20 一次';
+  $('shelf-plans').classList.add('hidden');
+  $('shelf-payment').classList.remove('hidden');
+});
+$('back-to-plans').addEventListener('click', () => {
+  $('shelf-payment').classList.add('hidden');
+  $('shelf-plans').classList.remove('hidden');
+});
+$('close-shelf').addEventListener('click', () => $('unlock-shelf').classList.add('hidden'));
+$('unlock-shelf').addEventListener('click', (event) => {
+  if (event.target === $('unlock-shelf')) $('unlock-shelf').classList.add('hidden');
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') $('unlock-shelf').classList.add('hidden');
+});
+
+$('manage').addEventListener('click', () => { switchManagerTab('quotes'); showView('manage'); });
 $('back').addEventListener('click', () => { cancelEdit(); showView('card'); });
-$('minimize').addEventListener('click', () => window.xingqian.resize('compact'));
-$('compact-view').addEventListener('click', () => window.xingqian.show());
+$('minimize').addEventListener('click', () => window.xingqian?.resize?.('compact'));
+$('quit').addEventListener('click', () => window.xingqian?.quit?.());
+$('compact-view').addEventListener('click', () => window.xingqian?.show?.());
 $('next-quote').addEventListener('click', async () => {
   const quotes = activeQuotes();
   if (quotes.length < 2) return;
@@ -291,12 +388,6 @@ $('quote-form').addEventListener('submit', async (event) => {
 $('cancel-edit').addEventListener('click', cancelEdit);
 $('always-top').addEventListener('change', async (event) => { appState.settings.alwaysOnTop = event.target.checked; await save(); renderCard(); });
 $('login-start').addEventListener('change', async (event) => { appState.settings.openAtLogin = event.target.checked; await save(); toast(event.target.checked ? '已设为登录时显示' : '已关闭登录时启动'); });
-$('weather-auto').addEventListener('change', async (event) => {
-  appState.settings.weatherUseAuto = event.target.checked;
-  renderWeatherSettings();
-  await save();
-});
-$('weather-refresh').addEventListener('click', () => refreshWeather(true));
 $('check-updates').addEventListener('click', async () => {
   $('check-updates').disabled = true;
   showUpdateStatus({ type: 'checking' });
@@ -304,23 +395,24 @@ $('check-updates').addEventListener('click', async () => {
   if (result.status === 'not-configured') showUpdateStatus({ type: 'error' });
   $('check-updates').disabled = !appState.updateConfigured;
 });
-window.xingqian.onWindowMode((mode) => document.body.classList.toggle('compact', mode === 'compact'));
-window.xingqian.onUpdateStatus(showUpdateStatus);
+window.xingqian?.onWindowMode?.((mode) => document.body.classList.toggle('compact', mode === 'compact'));
+window.xingqian?.onUpdateStatus?.(showUpdateStatus);
 
 (async () => {
-  const stored = await window.xingqian.getState();
-  Object.assign(appState, stored);
-  if (!appState.priorityId || !appState.quotes.some((q) => q.id === appState.priorityId)) {
-    appState.priorityId = appState.currentId || activeQuotes()[0]?.id || '';
+  if (window.xingqian?.getState) {
+    const stored = await window.xingqian.getState();
+    Object.assign(appState, stored);
+    if (!appState.priorityId || !appState.quotes.some((q) => q.id === appState.priorityId)) {
+      appState.priorityId = appState.currentId || activeQuotes()[0]?.id || '';
+    }
+    const today = dateKey();
+    if (appState.lastRotationDate && appState.lastRotationDate !== today) {
+      const quotes = activeQuotes();
+      if (quotes.length > 1) appState.currentId = quotes[Math.floor(Math.random() * quotes.length)].id;
+    }
+    appState.lastRotationDate = today;
+    await save();
   }
-  const today = dateKey();
-  if (appState.lastRotationDate && appState.lastRotationDate !== today) {
-    const quotes = activeQuotes();
-    if (quotes.length > 1) appState.currentId = quotes[Math.floor(Math.random() * quotes.length)].id;
-  }
-  appState.lastRotationDate = today;
-  await save();
   render();
-  refreshWeather();
-  setInterval(() => refreshWeather(), 20 * 60 * 1000);
 })();
+

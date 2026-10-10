@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, dialog, net, session } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -12,7 +12,6 @@ let updater = null;
 let updateFeedConfigured = false;
 let updateDownloaded = false;
 let statePath;
-const weatherCache = new Map();
 let state = {
   quotes: [{
     id: 'welcome',
@@ -24,7 +23,7 @@ let state = {
   }],
   currentId: 'welcome',
   priorityId: 'welcome',
-  settings: { alwaysOnTop: true, openAtLogin: true, weatherUseAuto: true, weatherCity: '', weatherLocationAllowed: false },
+  settings: { alwaysOnTop: true, openAtLogin: true },
   lastRotationDate: ''
 };
 
@@ -165,66 +164,6 @@ function setupAutoUpdates() {
   }
 }
 
-function describeWeather(code, isDay) {
-  if (code === 0) return [isDay ? '☀' : '☾', isDay ? '晴' : '晴夜'];
-  if (code === 1) return ['◒', '大致晴朗'];
-  if (code === 2) return ['◐', '局部多云'];
-  if (code === 3) return ['☁', '阴'];
-  if ([45, 48].includes(code)) return ['≋', '有雾'];
-  if ([51, 53, 55, 56, 57].includes(code)) return ['☂', '毛毛雨'];
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return ['☂', '有雨'];
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return ['❄', '有雪'];
-  if ([95, 96, 99].includes(code)) return ['ϟ', '雷雨'];
-  return ['☁', '天气'];
-}
-
-async function getWeatherAt(latitude, longitude, location) {
-  const key = `${latitude.toFixed(2)},${longitude.toFixed(2)}`;
-  const cached = weatherCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.search = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    current: 'temperature_2m,is_day,weather_code',
-    temperature_unit: 'celsius',
-    timezone: 'auto'
-  }).toString();
-  const response = await net.fetch(url.toString(), { signal: AbortSignal.timeout(9000) });
-  if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
-  const json = await response.json();
-  const current = json.current;
-  if (!current || !Number.isFinite(Number(current.temperature_2m))) throw new Error('Weather service returned no current conditions');
-  const [symbol, condition] = describeWeather(Number(current.weather_code), Number(current.is_day) === 1);
-  const value = { status: 'ok', location, temperature: Math.round(Number(current.temperature_2m)), symbol, condition };
-  weatherCache.set(key, { value, expiresAt: Date.now() + 15 * 60 * 1000 });
-  return value;
-}
-
-async function fetchWeather(request) {
-  if (request && Number.isFinite(Number(request.latitude)) && Number.isFinite(Number(request.longitude))) {
-    let latitude = Number(request.latitude);
-    let longitude = Number(request.longitude);
-    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) throw new Error('Invalid coordinates');
-    // Send and cache only city-scale coordinates, never the device's raw location.
-    latitude = Math.round(latitude * 100) / 100;
-    longitude = Math.round(longitude * 100) / 100;
-    return getWeatherAt(latitude, longitude, '当前位置');
-  }
-
-  const city = String(request?.city || '').trim().slice(0, 80);
-  if (!city) return { status: 'missing-city' };
-  const searchUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
-  searchUrl.search = new URLSearchParams({ name: city, count: '1', language: 'zh', format: 'json' }).toString();
-  const searchResponse = await net.fetch(searchUrl.toString(), { signal: AbortSignal.timeout(9000) });
-  if (!searchResponse.ok) throw new Error(`Geocoding service returned ${searchResponse.status}`);
-  const search = await searchResponse.json();
-  const place = search.results?.[0];
-  if (!place) return { status: 'not-found' };
-  const location = [place.name, place.admin1].filter((part, index, all) => part && all.indexOf(part) === index).join(' · ') || city;
-  return getWeatherAt(Number(place.latitude), Number(place.longitude), location);
-}
-
 ipcMain.handle('state:get', () => ({
   ...state,
   isPackaged: app.isPackaged,
@@ -245,10 +184,7 @@ ipcMain.handle('state:save', (_event, next) => {
     priorityId: String(next.priorityId || next.currentId || ''),
     settings: {
       alwaysOnTop: Boolean(next.settings.alwaysOnTop),
-      openAtLogin: Boolean(next.settings.openAtLogin),
-      weatherUseAuto: next.settings.weatherUseAuto !== false,
-      weatherCity: String(next.settings.weatherCity || '').trim().slice(0, 80),
-      weatherLocationAllowed: Boolean(state.settings.weatherLocationAllowed)
+      openAtLogin: Boolean(next.settings.openAtLogin)
     },
     lastRotationDate: String(next.lastRotationDate || '')
   };
@@ -265,6 +201,10 @@ ipcMain.handle('state:save', (_event, next) => {
 ipcMain.on('window:hide', () => cardWindow.hide());
 ipcMain.on('window:show', showCard);
 ipcMain.on('window:resize', (_event, size) => setWindowMode(size));
+ipcMain.on('app:quit', () => {
+  allowQuit = true;
+  app.quit();
+});
 ipcMain.handle('updates:check', async () => {
   if (!updateFeedConfigured || !updater) return { status: 'not-configured' };
   try {
@@ -274,47 +214,10 @@ ipcMain.handle('updates:check', async () => {
     return { status: 'error' };
   }
 });
-ipcMain.handle('weather:allow-location', async (event) => {
-  if (event.sender !== cardWindow?.webContents) return false;
-  if (state.settings.weatherLocationAllowed) return true;
-  const answer = await dialog.showMessageBox(cardWindow, {
-    type: 'question',
-    title: '使用当前位置查看天气？',
-    message: '醒签想使用设备的大致位置来查询本地天气。',
-    detail: '查询时会将约略坐标发送给天气服务；坐标不会保存在醒签中。',
-    buttons: ['允许', '暂不'],
-    defaultId: 0,
-    cancelId: 1,
-    noLink: true
-  });
-  if (answer.response !== 0) return false;
-  state.settings.weatherLocationAllowed = true;
-  persistState();
-  return true;
-});
-ipcMain.handle('weather:get', async (event, request) => {
-  if (event.sender !== cardWindow?.webContents) return { status: 'error' };
-  try {
-    return await fetchWeather(request);
-  } catch (_) {
-    return { status: 'error' };
-  }
-});
-
 app.setAppUserModelId(APP_ID);
 app.whenReady().then(() => {
   statePath = path.join(app.getPath('userData'), 'mottos.json');
   loadState();
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    callback(['geolocation', 'geolocation-approximate'].includes(permission)
-      && webContents === cardWindow?.webContents
-      && Boolean(state.settings.weatherLocationAllowed));
-  });
-  session.defaultSession.setPermissionCheckHandler((webContents, permission) => (
-    ['geolocation', 'geolocation-approximate'].includes(permission)
-      && webContents === cardWindow?.webContents
-      && Boolean(state.settings.weatherLocationAllowed)
-  ));
   applyLoginSetting();
   makeWindow();
   makeTray();
@@ -322,3 +225,4 @@ app.whenReady().then(() => {
   app.on('activate', showCard);
 });
 app.on('before-quit', () => { allowQuit = true; });
+

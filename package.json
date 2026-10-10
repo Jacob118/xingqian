@@ -1,6 +1,6 @@
 {
   "name": "xingqian-desktop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A quiet, always-on-top desktop card for the words that matter.",
   "main": "src/main.cjs",
   "private": true,
@@ -18,3 +18,4 @@
     "electron-updater": "^6.8.9"
   }
 }
+
