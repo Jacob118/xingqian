@@ -37,12 +37,82 @@ jobs:
                 `xingqian-macos-x64-${version}.dmg`,
                 `xingqian-macos-arm64-${version}.dmg`
               ];
+              const installerName = `xingqian-desktop-setup-${version}.exe`;
+              const hasWindowsAssets = release.assets.some(asset => asset.name === installerName)
+                && release.assets.some(asset => asset.name === 'latest.yml');
+              core.setOutput('has_windows_assets', hasWindowsAssets ? 'true' : 'false');
               core.setOutput('has_mac_assets', expectedMacAssets.every(name => release.assets.some(asset => asset.name === name)) ? 'true' : 'false');
-              core.setOutput('already-published', release.draft ? 'false' : 'true');
+              core.setOutput('already-published', !release.draft && hasWindowsAssets ? 'true' : 'false');
             } catch (error) {
               if (error.status !== 404) throw error;
+              core.setOutput('has_windows_assets', 'false');
               core.setOutput('has_mac_assets', 'false');
               core.setOutput('already-published', 'false');
+            }
+      - if: steps.release.outputs.already-published != 'true'
+        name: Prepare release tag and draft before building
+        uses: actions/github-script@v7
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+        with:
+          script: |
+            const tag = `v${process.env.APP_VERSION}`;
+            try {
+              await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag
+              });
+              core.info(`Release ${tag} already exists.`);
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              try {
+                await github.rest.git.getRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `tags/${tag}`
+                });
+              } catch (refError) {
+                if (refError.status !== 404) throw refError;
+                await github.rest.git.createRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `refs/tags/${tag}`,
+                  sha: context.sha
+                });
+              }
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tag,
+                target_commitish: context.sha,
+                name: process.env.APP_VERSION,
+                draft: true,
+                prerelease: false
+              });
+              core.info(`Prepared draft release ${tag}.`);
+            }
+      - if: steps.release.outputs.already-published != 'true'
+        name: Remove incomplete Windows assets before rebuilding
+        uses: actions/github-script@v7
+        env:
+          APP_VERSION: ${{ steps.release.outputs.version }}
+        with:
+          script: |
+            const tag = `v${process.env.APP_VERSION}`;
+            const installerName = `xingqian-desktop-setup-${process.env.APP_VERSION}.exe`;
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag
+            });
+            const incompleteAssets = new Set([installerName, `${installerName}.blockmap`, 'latest.yml']);
+            for (const asset of release.assets.filter(item => incompleteAssets.has(item.name))) {
+              await github.rest.repos.deleteReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: asset.id
+              });
             }
       - if: steps.release.outputs.already-published != 'true'
         run: npm ci
@@ -153,3 +223,4 @@ jobs:
                 }
               });
             }
+
